@@ -255,6 +255,46 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 
 	//여기서 DB에 연결 및 인증
 	//DB인증과정....
+	CDBConnector* pDBConnector = (CDBConnector*)TlsGetValue(pNetServer->TLS_DBConnectIndex);
+	ULONGLONG DBLastTime = (ULONGLONG)TlsGetValue(pNetServer->TLS_DBLastTimeIndex);
+	ULONGLONG DBNowTime = GetTickCount64();
+	if (DBNowTime - DBLastTime > 3600000)
+	{
+		pDBConnector->Ping();
+
+	}
+	TlsSetValue(pNetServer->TLS_DBLastTimeIndex, (LPVOID)DBNowTime);
+
+	bool queryret = dbConnector.sendQuery_Save(L"SELECT * FROM AccountInfo WHERE email = %S", Email.Email);
+	if (queryret == false)
+	{
+		WCHAR ErrorMsg[128];
+		wcscpy_s(ErrorMsg, dbConnector.GetLastErrorMsg());
+	}
+
+	MYSQL_ROW sql_row;
+	sql_row = dbConnector.FetchRow();
+
+	//토큰 유효성 검사
+
+	//accountNo, PW, State 가져옴
+	//일반로그인이면 여기서 pw확인, 구글로그인이면 api 호출
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	MYSQL* connection = (MYSQL*)TlsGetValue(pNetServer->TLS_DBConnectIndex);
 	ULONGLONG DBLastTime = (ULONGLONG)TlsGetValue(pNetServer->TLS_DBLastTimeIndex);
 	ULONGLONG DBNowTime = GetTickCount64();
