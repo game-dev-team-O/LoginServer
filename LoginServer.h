@@ -1,6 +1,7 @@
 #pragma once
 
 #define MAX_SERVERNUM 10
+#define MAX_FAILCOUNT 5
 using namespace std;
 
 enum {
@@ -9,6 +10,7 @@ enum {
     TARGET_SERVER_2,
     TARGET_SERVER_3
 };
+
 
 struct st_IP
 {
@@ -45,10 +47,10 @@ public:
     struct st_Player
     {
         BOOL isPacketRecv;
+        SHORT Failcount;
         INT64 AccountNo;
         st_Email Email;
         INT64 JoinFlag;
-        st_UserName Nickname;
         INT64 sessionID;
         ULONGLONG lastTime;
     };
@@ -58,7 +60,6 @@ public:
         INT64 AccountNo;
         INT64 SessionID;
         st_Player* pPlayer;
-        CPacket* pPacket;
     };
 
 
@@ -75,9 +76,10 @@ public:
     //패킷 프로시저들!!
     void CS_LOGIN_LOGINSERVER_RES(INT64 SessionID, char ResponseType, st_SessionKey& sessionKey, st_IP& GameServerIP, int GameServerPort);
     bool packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPacket* pPacket, INT64 SessionID);
-    bool packetProc_CS_LOGIN_REQ_LOGIN(st_Player* pPlayer, CPacket* pPacket, INT64 SessionID);
     bool PacketProc(st_Player* pPlayer, WORD PacketType, CPacket* pPacket, INT64 SessionID);
 
+    void setDBInfo(WCHAR* DB_IP, WCHAR* DB_User, WCHAR* DB_Password, WCHAR* DB_Name, int DB_Port);
+    void addBanIP(int BanIP);
     size_t getCharacterNum(void);
     LONG getPlayerPoolUseSize(void);
     LONG getJobQueueUseSize(void);
@@ -99,16 +101,26 @@ public:
     st_ServerAddress GameServerList[MAX_SERVERNUM];
 
 private:
-  
+
     HANDLE hLogicThread;
     HANDLE hMemoryDBThread;
     volatile bool ShutDownFlag;
     int maxPlayer;
 
+    WCHAR DB_IP[16];
+    WCHAR DB_User[50];
+    WCHAR DB_Password[50];
+    WCHAR DB_Name[50];
+    int DB_Port;
+
     ULONGLONG lastTime;
     CNetServer* pNetServer;
     unordered_map<INT64, st_Player*> PlayerList; // key : sessionID, value : Player*, 모든 로직 사용
-    alignas(64) SRWLOCK PlayerListLock;
+    SRWLOCK PlayerListLock;
+
+    unordered_set<int> BanIPList;
+    SRWLOCK BanListLock;
+
     alignas(64) LockFreeQueue<st_JobItem> JobQueue;
     alignas(64) CMemoryPool<CLoginServer::st_Player> PlayerPool;
     HANDLE hJobEvent;
@@ -124,22 +136,23 @@ public:
     }
     virtual bool OnConnectionRequest(WCHAR* IP, int* outParam) 
     { 
-        if (wcsncmp(IP, L"10.0.1.2", 16) == 0)
-        {
-            *outParam = TARGET_SERVER_1;
-        }
 
-        else if (wcsncmp(IP, L"10.0.2.2", 16) == 0)
+        //outParam으로 JoinFlag를 지정함
+        //밴된 IP를 찾아봄.
+        SOCKADDR_IN sockAddr;
+        InetPtonW(AF_INET, IP, &sockAddr.sin_addr);
+        int IP_INT = ntohl(sockAddr.sin_addr.s_addr);
+        AcquireSRWLockShared(&pLoginServer->BanListLock);
+        if (pLoginServer->BanIPList.find(IP_INT) != pLoginServer->BanIPList.end())
         {
-            *outParam = TARGET_SERVER_2;
+            ReleaseSRWLockShared(&pLoginServer->BanListLock);
+            return false;
         }
-
-        else if (wcsncmp(IP, L"127.0.0.1", 16) == 0)
+        else
         {
-            *outParam = TARGET_SERVER_3;
+            ReleaseSRWLockShared(&pLoginServer->BanListLock);
+            return true;
         }
-
-        return true; 
     }
 
     virtual void OnClientJoin(INT64 sessionID, int JoinFlag)
@@ -151,8 +164,7 @@ public:
         pNewPlayer->isPacketRecv = FALSE;
         pNewPlayer->AccountNo = 0;
         pNewPlayer->JoinFlag = JoinFlag;
-        wcscpy_s(pNewPlayer->ID.name, L"NULL");
-        wcscpy_s(pNewPlayer->Nickname.name, L"NULL");
+        wcscpy_s(pNewPlayer->Email.Email, L"NULL");
         pNewPlayer->sessionID = sessionID;
         pNewPlayer->lastTime = GetTickCount64();
 

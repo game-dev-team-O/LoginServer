@@ -28,6 +28,9 @@
 
 CNetServer::CNetServer(CInitParam* pParam)
 {
+	WSADATA wsa;
+	WSAStartup(MAKEWORD(2, 2), &wsa);
+
 	wcscpy_s(openIP, pParam->openIP);
 	openPort = pParam->openPort;
 	maxThreadNum = pParam->maxThreadNum;
@@ -47,6 +50,7 @@ CNetServer::CNetServer(CInitParam* pParam)
 CNetServer::~CNetServer()
 {
 	Stop();
+	WSACleanup();
 }
 
 bool CNetServer::Start()
@@ -587,6 +591,23 @@ void CNetServer::sendPacket(CSessionSet* pSessionSet, CPacket* pPacket, BOOL Las
 	}
 }
 
+void CNetServer::setDBInfo(WCHAR* DB_IP, WCHAR* DB_User, WCHAR* DB_Password, WCHAR* DB_Name, int DB_Port)
+{
+	wcscpy_s(this->DB_IP, DB_IP);
+	wcscpy_s(this->DB_User, DB_User);
+	wcscpy_s(this->DB_Password, DB_Password);
+	wcscpy_s(this->DB_Name, DB_Name);
+	this->DB_Port = DB_Port;
+}
+
+int CNetServer::getSessionIP(INT64 SessionID)
+{
+	short index = (short)SessionID;
+	st_Session* pSession = &sessionList[index];
+	return pSession->IP_INT;
+}
+
+
 int CNetServer::getMaxSession()
 {
 	return this->maxSession;
@@ -702,11 +723,12 @@ DWORD WINAPI CNetServer::AcceptThread(CNetServer* ptr)
 		ptr->acceptCount++;
 		WCHAR clientIP[16] = { 0 };
 		int JoinFlag = 0;
-		InetNtopW(AF_INET, &clientaddr.sin_addr, clientIP, sizeof(clientIP));
+		InetNtopW(AF_INET, &clientaddr.sin_addr, clientIP, 16);
 
 		BOOL ret_req = ptr->pHandler->OnConnectionRequest(clientIP, &JoinFlag);
 		if (ret_req == FALSE)
 		{
+			closesocket(client_sock);
 			continue;
 		}
 		int index = 0;
@@ -716,6 +738,7 @@ DWORD WINAPI CNetServer::AcceptThread(CNetServer* ptr)
 		{
 			systemLog(L"ACCEPT EXCEPTION", dfLOG_LEVEL_DEBUG, L"sessionList FULL");
 			closesocket(client_sock);
+			continue;
 		}
 
 		INT64 AllocNum = ptr->sessionAllocNum++;//CompletionKey로 사용
@@ -729,6 +752,8 @@ DWORD WINAPI CNetServer::AcceptThread(CNetServer* ptr)
 		InterlockedExchange(&pSession->releaseFlag, DELFLAG_OFF);
 		ZeroMemory(&pSession->RecvOverlapped, sizeof(WSAOVERLAPPED));
 		ZeroMemory(&pSession->SendOverlapped, sizeof(WSAOVERLAPPED));
+
+		pSession->IP_INT = ntohl(clientaddr.sin_addr.s_addr);
 		pSession->RecvOverlapped.flag = 0;
 		pSession->SendOverlapped.flag = 1;
 		pSession->sock = client_sock;
@@ -787,10 +812,12 @@ DWORD WINAPI CNetServer::WorkerThread(CNetServer* ptr)
 	int ret_GQCS;
 
 
-	CDBConnector DBConnector(L"database-1.cyqw8yjqmmzl.ap-northeast-2.rds.amazonaws.com", L"admin", L"123456789", L"AccountDB", 3306, ptr->TLS_DBConnectIndex, ptr->DBInitLock);
-	if (DBConnector.Connect() == false)
+	CDBConnector DBConnector(ptr->DB_IP, ptr->DB_User, ptr->DB_Password, ptr->DB_Name, ptr->DB_Port, ptr->TLS_DBConnectIndex, ptr->DBInitLock);
+	if (DBConnector.Connect(ptr->DBInitLock) == false)
 	{
-		systemLog(L"DB Connect Error", dfLOG_LEVEL_ERROR, L"thread id : %d", GetCurrentThreadId());
+		WCHAR ErrorMsg[100];
+		wcscpy_s(ErrorMsg, DBConnector.GetLastErrorMsg());
+		systemLog(L"DB Connect Error", dfLOG_LEVEL_ERROR, L"thread id : %d, error : %s", GetCurrentThreadId(), ErrorMsg);
 		CrashDump::Crash();
 	}
 	
@@ -944,6 +971,6 @@ DWORD WINAPI CNetServer::WorkerThread(CNetServer* ptr)
 		}
 	}
 
-	mysql_close(connection);
+	DBConnector.Disconnect();
 	return 0;
 }

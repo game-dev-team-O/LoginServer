@@ -2,6 +2,7 @@
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib,"Pdh.lib")
 #pragma comment(lib, "libmysql.lib")
+#include <filesystem>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <dbghelp.h>
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <Pdh.h>
 #include <strsafe.h>
+#include <unordered_set>
 #include <unordered_map>
 #include <conio.h>
 #include <mysql.h>
@@ -36,39 +38,76 @@ using namespace std;
 
 CrashDump myDump;
 
-WCHAR IPaddress[20] = L"0.0.0.0";
-
-CInitParam initParam(IPaddress, 10000, 100, 3, true, 15000);
-CNetServer NetServer(&initParam);
-CLoginServer LoginServer;
-
-CHardwareMonitor Hardware_Monitor;
-CProcessMonitor Process_Monitor(GetCurrentProcess());
-
 
 int main()
 {
 	PRO_INIT();
 
+	WCHAR NetServer_OpenIP[20];
+	int NetServer_OpenPort;
+	int NetServer_maxThread;
+	int NetServer_concurrentThread;
+	int NetServer_Nagle;
+	int NetServer_maxSession;
+
+	GetPrivateProfileString(L"NetServer", L"openIP", L"0.0.0.0", NetServer_OpenIP, 20, L".\\ServerConfig.ini");
+	NetServer_OpenPort = GetPrivateProfileInt(L"NetServer", L"openPort", 0, L".\\ServerConfig.ini");
+	NetServer_maxThread = GetPrivateProfileInt(L"NetServer", L"maxThread", 0, L".\\ServerConfig.ini");
+	NetServer_concurrentThread = GetPrivateProfileInt(L"NetServer", L"concurrentThread", 0, L".\\ServerConfig.ini");
+	NetServer_Nagle = GetPrivateProfileInt(L"NetServer", L"Nagle", 0, L".\\ServerConfig.ini");
+	NetServer_maxSession = GetPrivateProfileInt(L"NetServer", L"maxSession", 0, L".\\ServerConfig.ini");
+
+	WCHAR DB_Address[100] = { 0, };
+	WCHAR DB_User[50] = { 0, };
+	WCHAR DB_Password[50] = { 0, };
+	WCHAR DB_Name[50] = { 0, };
+	int DB_Port = 0;
+
+	GetPrivateProfileString(L"DataBase", L"DBIP", L"NULL", DB_Address, 100, L".\\ServerConfig.ini");
+	GetPrivateProfileString(L"DataBase", L"User", L"NULL", DB_User, 50, L".\\ServerConfig.ini");
+	GetPrivateProfileString(L"DataBase", L"Password", L"NULL", DB_Password, 50, L".\\ServerConfig.ini");
+	GetPrivateProfileString(L"DataBase", L"DBName", L"NULL", DB_Name, 50, L".\\ServerConfig.ini");
+	DB_Port = GetPrivateProfileInt(L"DataBase", L"DBPort", 0, L".\\ServerConfig.ini");
+
+
+	CInitParam initParam(NetServer_OpenIP, NetServer_OpenPort, NetServer_maxThread, NetServer_concurrentThread, NetServer_Nagle, NetServer_maxSession);
+	CNetServer* pNetServer = new CNetServer(&initParam);
+	CLoginServer* pLoginServer = new CLoginServer;
+
+	WCHAR DBIP[16] = { 0, };
+	if (CNetServer::DomainToIP(DB_Address, DBIP) == false)
+	{
+		systemLog(L"Start Error", dfLOG_LEVEL_ERROR, L"DB Domain Error");
+		return false;
+	}
+
+	pLoginServer->setDBInfo(DBIP, DB_User, DB_Password, DB_Name, DB_Port);
+	pNetServer->setDBInfo(DBIP, DB_User, DB_Password, DB_Name, DB_Port);
+
+	CHardwareMonitor Hardware_Monitor;
+	CProcessMonitor Process_Monitor(GetCurrentProcess());
+
+
+
 	volatile bool g_ShutDown = false;
 	logInit();
 
 	CContentsHandler HandleInstance;
-	HandleInstance.attachServerInstance(&NetServer, &LoginServer);
+	HandleInstance.attachServerInstance(pNetServer, pLoginServer);
 
-	NetServer.attachHandler(&HandleInstance);
-	LoginServer.attachServerInstance(&NetServer);
+	pNetServer->attachHandler(&HandleInstance);
+	pLoginServer->attachServerInstance(pNetServer);
 
-	if (LoginServer.Start() == false)
+	if (pLoginServer->Start() == false)
 	{
 		wprintf(L"ChatServer Thread init error");
 		systemLog(L"Start Error", dfLOG_LEVEL_ERROR, L"ChatServer Thread init Error");
 		return false;
 	}
 
-	if (NetServer.Start() == false)
+	if (pNetServer->Start() == false)
 	{
-		systemLog(L"Start Error", dfLOG_LEVEL_ERROR, L"NetServer Init Error, ErrorNo : %u, ErrorCode : %d", NetServer.InitErrorNum, NetServer.InitErrorCode);
+		systemLog(L"Start Error", dfLOG_LEVEL_ERROR, L"NetServer Init Error, ErrorNo : %u, ErrorCode : %d", pNetServer->InitErrorNum, pNetServer->InitErrorCode);
 		return false;
 	}
 
@@ -86,27 +125,26 @@ int main()
 				g_ShutDown = true;
 			}
 		}
-		LoginServer.updateJobCount();
-		LoginServer.updateNumOfWFSO();
+		pLoginServer->updateJobCount();
+		pLoginServer->updateNumOfWFSO();
 
 		Hardware_Monitor.Update();
 		Process_Monitor.Update();
 
 		wprintf(L"======================\n");
-		wprintf(L"session number : %d\n", NetServer.getSessionCount());
-		wprintf(L"Character Number : %lld\n", LoginServer.getCharacterNum());
-		wprintf(L"Accept Sum : %lld\n", NetServer.getAcceptSum());
-		wprintf(L"Accept TPS : %d\n", NetServer.getAcceptTPS());
-		wprintf(L"Disconnect TPS : %d\n", NetServer.getDisconnectTPS());
-		wprintf(L"Send TPS : %d\n", NetServer.getSendMessageTPS());
-		wprintf(L"Recv TPS : %d\n", NetServer.getRecvMessageTPS());
-		wprintf(L"JobQueue UseSize : %d\n", LoginServer.getJobQueueUseSize());
-		wprintf(L"Job TPS : %d\n", LoginServer.JobCount);
-		wprintf(L"Number Of Sleep per second : %d\n", LoginServer.getNumOfWFSO());
-		wprintf(L"Job Count Per Cycle : %d\n", LoginServer.getJobCountperCycle());
+		wprintf(L"session number : %d\n", pNetServer->getSessionCount());
+		wprintf(L"Character Number : %lld\n", pLoginServer->getCharacterNum());
+		wprintf(L"Accept Sum : %lld\n", pNetServer->getAcceptSum());
+		wprintf(L"Accept TPS : %d\n", pNetServer->getAcceptTPS());
+		wprintf(L"Disconnect TPS : %d\n", pNetServer->getDisconnectTPS());
+		wprintf(L"Send TPS : %d\n", pNetServer->getSendMessageTPS());
+		wprintf(L"Recv TPS : %d\n", pNetServer->getRecvMessageTPS());
+		wprintf(L"JobQueue UseSize : %d\n", pLoginServer->getJobQueueUseSize());
+		wprintf(L"Job TPS : %d\n", pLoginServer->JobCount);
+		wprintf(L"Number Of Sleep per second : %d\n", pLoginServer->getNumOfWFSO());
+		wprintf(L"Job Count Per Cycle : %d\n", pLoginServer->getJobCountperCycle());
 		wprintf(L"PacketPool UseSize : %d\n", CPacket::getPoolUseSize() * POOL_BUCKET_SIZE);
-		wprintf(L"PlayerPool UseSize : %d\n", LoginServer.getPlayerPoolUseSize());
-		wprintf(L"Time Check Interval : %lld\n", LoginServer.Interval);
+		wprintf(L"PlayerPool UseSize : %d\n", pLoginServer->getPlayerPoolUseSize());
 		wprintf(L"======================\n");
 		wprintf(L"Process User Memory : %lld Bytes\n", (INT64)Process_Monitor.getProcessUserMemory());
 		wprintf(L"Process Nonpaged Memory : %lld Bytes\n", (INT64)Process_Monitor.getProcessNonpagedMemory());
@@ -125,8 +163,8 @@ int main()
 		Sleep(1000);
 	}
 
-	LoginServer.Stop();
-	NetServer.Stop();
+	pLoginServer->Stop();
+	pNetServer->Stop();
 
 	PRO_LOG();
 	return 0;

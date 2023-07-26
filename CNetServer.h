@@ -27,6 +27,7 @@ struct alignas(4096) st_Session
 {
 	INT64 sessionID;
 	SOCKET sock;
+	volatile int IP_INT;
 	volatile LONG isValid; // 세션 유효여부, 1(할당완료) 0(미사용중)
 	volatile LONG releaseFlag; // release 로직 실행여부 확인, DELFLAG_OFF(정상사용) DELFLAG_ON(삭제중 or 삭제 완료)
 	volatile LONG IOcount; //0이면 삭제
@@ -111,6 +112,8 @@ public:
 	void releaseSession(INT64 SessionID);
 	void releaseRequest(st_Session* pSession);
 
+	void setDBInfo(WCHAR* DB_IP, WCHAR* DB_User, WCHAR* DB_Password, WCHAR* DB_Name, int DB_Port);
+	int getSessionIP(INT64 SessionID);
 	int getMaxSession();
 	INT64 getAcceptSum();
 	int getSessionCount();
@@ -131,6 +134,21 @@ public:
 	volatile DWORD TLS_DBConnectIndex;
 	volatile DWORD TLS_DBLastTimeIndex;
 
+	static bool DomainToIP(WCHAR* Domain, WCHAR* IPaddress)
+	{
+		ADDRINFOW* pAddrInfo;
+		SOCKADDR_IN* pSockAddr;
+		if (GetAddrInfo(Domain, L"0", NULL, &pAddrInfo) != 0)
+		{
+			INT Num = WSAGetLastError();
+			return false;
+		}
+		pSockAddr = (SOCKADDR_IN*)pAddrInfo->ai_addr;
+		InetNtop(AF_INET, &pSockAddr->sin_addr, IPaddress, 16);
+		FreeAddrInfo(pAddrInfo);
+		return true;
+	}
+
 private:
 	CNetServerHandler* pHandler;
 
@@ -143,6 +161,12 @@ private:
 	int concurrentThreadNum;
 	bool Nagle;
 	int maxSession;
+
+	WCHAR DB_IP[16];
+	WCHAR DB_User[50];
+	WCHAR DB_Password[50];
+	WCHAR DB_Name[50];
+	int DB_Port;
 
 	st_Session sessionList[dfMAX_SESSION];
 	LockFreeStack<int> emptyIndexStack;

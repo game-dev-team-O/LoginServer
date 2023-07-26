@@ -37,6 +37,21 @@ public:
 		mysql_options(&MySQL_conn, MYSQL_OPT_RECONNECT, &reconnect);
 	}
 
+	CDBConnector(const WCHAR* DBIP, const WCHAR* User, const WCHAR* Password, const WCHAR* DBName, int DBPort)
+	{
+		wcscpy_s(this->DBIP, DBIP);
+		wcscpy_s(this->DBUser, User);
+		wcscpy_s(this->DBPassword, Password);
+		wcscpy_s(this->DBName, DBName);
+		this->DBPort = DBPort;
+		maxQueryTime = 0;
+
+		mysql_init(&MySQL_conn);
+
+		bool reconnect = true;
+		mysql_options(&MySQL_conn, MYSQL_OPT_RECONNECT, &reconnect);
+	}
+
 	virtual		~CDBConnector() {};
 
 	//////////////////////////////////////////////////////////////////////
@@ -53,6 +68,27 @@ public:
 		int ret3 = WideCharToMultiByte(CP_ACP, 0, DBPassword, -1, m_DBPassword, 64, NULL, NULL);
 		int ret4 = WideCharToMultiByte(CP_ACP, 0, DBName, -1, m_DBName, 64, NULL, NULL);
 		pMySQL_conn = mysql_real_connect(&MySQL_conn, m_DBIP, m_DBUser, m_DBPassword, m_DBName, DBPort, (char*)NULL, 0);
+		if (pMySQL_conn == NULL)
+		{
+			SaveLastError();
+			return false;
+		}
+		return true;
+	}
+
+	bool		Connect(SRWLOCK& InitLock)
+	{
+		char m_DBIP[16];
+		char m_DBUser[64];
+		char m_DBPassword[64];
+		char m_DBName[64];
+		int ret1 = WideCharToMultiByte(CP_ACP, 0, DBIP, -1, m_DBIP, 16, NULL, NULL);
+		int ret2 = WideCharToMultiByte(CP_ACP, 0, DBUser, -1, m_DBUser, 64, NULL, NULL);
+		int ret3 = WideCharToMultiByte(CP_ACP, 0, DBPassword, -1, m_DBPassword, 64, NULL, NULL);
+		int ret4 = WideCharToMultiByte(CP_ACP, 0, DBName, -1, m_DBName, 64, NULL, NULL);
+		AcquireSRWLockExclusive(&InitLock);
+		pMySQL_conn = mysql_real_connect(&MySQL_conn, m_DBIP, m_DBUser, m_DBPassword, m_DBName, DBPort, (char*)NULL, 0);
+		ReleaseSRWLockExclusive(&InitLock);
 		if (pMySQL_conn == NULL)
 		{
 			SaveLastError();
