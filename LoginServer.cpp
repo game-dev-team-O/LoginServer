@@ -42,12 +42,6 @@ using namespace std;
 CLoginServer::CLoginServer()
 {
 	ShutDownFlag = false;
-	wcscpy_s(ChatServerList[0].serverIP.IP, L"10.0.1.1");
-	ChatServerList[0].serverPort = 6000;
-	wcscpy_s(ChatServerList[1].serverIP.IP, L"10.0.2.1");
-	ChatServerList[1].serverPort = 6000;
-	wcscpy_s(ChatServerList[2].serverIP.IP, L"127.0.0.1");
-	ChatServerList[2].serverPort = 6000;
 
 	lastTime = 0;
 	pNetServer = NULL;
@@ -204,7 +198,7 @@ bool CLoginServer::Start()
 	hMemoryDBThread = (HANDLE)_beginthreadex(NULL, 0, (_beginthreadex_proc_type)&MemoryDBThread, this, 0, 0);
 	if (hLogicThread == NULL || hMemoryDBThread == NULL)
 	{
-		wprintf(L"Thread init error"); // 로그로대체
+		wprintf(L"Thread init error");
 		systemLog(L"LoginServer Thread init error", dfLOG_LEVEL_ERROR, L"");
 		return false;
 	}
@@ -421,7 +415,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 	}
 	}
 
-	//FailCount == 5일시 Ban List에 추가 및 DB에 올림. Ban List는 서버 시작시 한번 가져옴 << 레드블랙트리(unordered map) 사용
+	//FailCount == 5일시 Ban List에 추가 및 DB에 올림. Ban List는 서버 시작시 한번 가져옴 << 레드블랙트리(unordered set) 사용
 	//인증 완료
 
 	//redis 저장 스레드에 잡 만들어서 toss

@@ -218,7 +218,6 @@ public:
         bool ret = pLoginServer->PacketProc(&player, packetType, pPacket, SessionID);
         if (ret == false)
         {
-            //아래부분 함수로 래핑
             st_Session* pSession;
             if (pLoginServer->pNetServer->findSession(player.sessionID, &pSession) == true)
             {
