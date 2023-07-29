@@ -65,7 +65,7 @@ DWORD WINAPI CLoginServer::LogicThread(CLoginServer* pLoginServer)
 {
 	while (!pLoginServer->ShutDownFlag)
 	{
-		//시간 쟤서 모든세션의 lastPacket 확인 -> 40초가 지났다면 그세션끊기
+		//시간 쟤서 모든세션의 lastPacket 확인 -> 3분이 지났다면 그세션끊기
 		AcquireSRWLockShared(&pLoginServer->PlayerListLock);
 		ULONGLONG curTime = GetTickCount64();
 		pLoginServer->Interval = curTime - pLoginServer->lastTime;
@@ -78,7 +78,7 @@ DWORD WINAPI CLoginServer::LogicThread(CLoginServer* pLoginServer)
 			{
 				continue;
 			}
-			if (curTime > player.lastTime + 50000)
+			if (curTime > player.lastTime + 300000)
 			{
 				if (pLoginServer->pNetServer->findSession(player.sessionID, &pSession) == true)
 				{
@@ -154,6 +154,7 @@ DWORD WINAPI CLoginServer::MemoryDBThread(CLoginServer* pLoginServer)
 		pLoginServer->Temp_NumOfWFSO++;
 		WaitForSingleObject(pLoginServer->hJobEvent, INFINITE);
 	}
+	WSACleanup();
 	return true;
 }
 
@@ -337,7 +338,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 	}
 
 	//DB에서 accountNo, PW, State 가져옴
-	unsigned char encryptedPW[32];
+	unsigned char encryptedPW[32] = { 0, };
 	INT64 accountNo = atoll(sql_row[0]);
 	if (sql_row[1] != NULL)
 	{
@@ -455,6 +456,12 @@ void CLoginServer::setDBInfo(WCHAR* DB_IP, WCHAR* DB_User, WCHAR* DB_Password, W
 	wcscpy_s(this->DB_Password, DB_Password);
 	wcscpy_s(this->DB_Name, DB_Name);
 	this->DB_Port = DB_Port;
+}
+
+void CLoginServer::setGameServerInfo(WCHAR* GameServer_IP, int GameServer_Port)
+{
+	wcscpy_s(this->GameServerList[0].serverIP.IP, GameServer_IP);
+	this->GameServerList[0].serverPort = GameServer_Port;
 }
 
 void CLoginServer::addBanIP(int BanIP)

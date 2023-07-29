@@ -78,6 +78,7 @@ public:
     bool packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPacket* pPacket, INT64 SessionID);
     bool PacketProc(st_Player* pPlayer, WORD PacketType, CPacket* pPacket, INT64 SessionID);
 
+    void setGameServerInfo(WCHAR* GameServer_IP, int GameServer_Port);
     void setDBInfo(WCHAR* DB_IP, WCHAR* DB_User, WCHAR* DB_Password, WCHAR* DB_Name, int DB_Port);
     void addBanIP(int BanIP);
     size_t getCharacterNum(void);

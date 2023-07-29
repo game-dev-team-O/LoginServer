@@ -69,6 +69,11 @@ int main()
 	GetPrivateProfileString(L"DataBase", L"DBName", L"NULL", DB_Name, 50, L".\\ServerConfig.ini");
 	DB_Port = GetPrivateProfileInt(L"DataBase", L"DBPort", 0, L".\\ServerConfig.ini");
 
+	WCHAR GameServer_OpenIP[20];
+	int GameServer_OpenPort;
+
+	GetPrivateProfileString(L"GameServer", L"openIP", L"0.0.0.0", GameServer_OpenIP, 20, L".\\ServerConfig.ini");
+	GameServer_OpenPort = GetPrivateProfileInt(L"GameServer", L"openPort", 0, L".\\ServerConfig.ini");
 
 	CInitParam initParam(NetServer_OpenIP, NetServer_OpenPort, NetServer_maxThread, NetServer_concurrentThread, NetServer_Nagle, NetServer_maxSession);
 	CNetServer* pNetServer = new CNetServer(&initParam);
@@ -82,6 +87,7 @@ int main()
 	}
 
 	pLoginServer->setDBInfo(DBIP, DB_User, DB_Password, DB_Name, DB_Port);
+	pLoginServer->setGameServerInfo(GameServer_OpenIP, GameServer_OpenPort);
 	pNetServer->setDBInfo(DBIP, DB_User, DB_Password, DB_Name, DB_Port);
 
 	CHardwareMonitor Hardware_Monitor;

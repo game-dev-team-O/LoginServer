@@ -41,7 +41,7 @@ enum en_PROTOCOL_TYPE
 	//	{
 	//		SHORT	Type
 	//
-	//		char    ResponseType //  만료(1), 잘못된토큰(2), 없는계정(3), 정지된 계정(4), 밴 된 IP(5), 성공(0)
+	//		char    ResponseType //  만료(1), 잘못된토큰(2), 없는계정(3), 정지된 계정(4), 밴 된 IP(5) : 현재는 사용x, 성공(0)
 	//		char	Key[64]; // 인증키. 게임서버로 로그인시 해당 키를 같이 송신한다
 	//		WCHAR   IP[20]  // 접속할 게임서버의 ip
 	//		int     Port	// 접속할 게임서버의 port

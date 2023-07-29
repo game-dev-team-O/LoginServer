@@ -714,7 +714,10 @@ DWORD WINAPI CNetServer::AcceptThread(CNetServer* ptr)
 			}
 			else
 			{
-				systemLog(L"ACCEPT EXCEPTION", dfLOG_LEVEL_ERROR, L"ErrorCode : %d", ErrorCode);
+				if (ErrorCode != 10038)
+				{
+					systemLog(L"ACCEPT EXCEPTION", dfLOG_LEVEL_ERROR, L"ErrorCode : %d", ErrorCode);
+				}
 				break;
 			}
 
