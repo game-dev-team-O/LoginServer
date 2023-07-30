@@ -3,6 +3,8 @@
 #include "MemoryPoolBucket.h"
 #include "Packet.h"
 
+#define Encode_option
+
 using namespace std;
 
 CMemoryPoolBucket<CPacket> CPacket::PacketPool;
@@ -44,8 +46,13 @@ void CPacket::Release(void)
 void CPacket::Clear(void)
 {
 	readPos = begin;
-	writePos = begin+dfNETWORK_HEADER_SIZE;
+#ifdef Encode_option
+	writePos = begin + dfNETWORK_HEADER_SIZE;
 	DataSize = dfNETWORK_HEADER_SIZE;
+#else
+	writePos = begin;
+	DataSize = 0;
+#endif
 }
 
 void CPacket::ClearNetwork(void)
@@ -129,6 +136,8 @@ int CPacket::MoveReadPos(int Size)
 
 BOOL CPacket::Encode()
 {
+#ifdef Encode_option
+
 	if (DataSize <= 5)
 	{
 		return FALSE;
@@ -160,12 +169,14 @@ BOOL CPacket::Encode()
 		encodingPos++;
 	}
 
+#endif
 	InterlockedExchange((LONG*)&encodeFlag, TRUE);
 	return TRUE;
 }
 
 BOOL CPacket::Decode()
 {
+#ifdef Encode_option
 	if (DataSize <= 5)
 	{
 		return FALSE;
@@ -200,7 +211,7 @@ BOOL CPacket::Decode()
 	{
 		return FALSE;
 	}
-
+#endif
 	return TRUE;
 }
 
@@ -212,7 +223,9 @@ CPacket* CPacket::mAlloc()
 	PacketPool.mAlloc(&temp);
 	temp->refCount = 0;
 	temp->encodeFlag = FALSE;
+#ifdef Encode_option
 	temp->MoveWritePos(dfNETWORK_HEADER_SIZE);
+#endif
 	return temp;
 }
 
