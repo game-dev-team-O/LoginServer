@@ -33,6 +33,7 @@
 #include "CommonProtocol.h"
 #include "CNetServer.h"
 #include "LoginServer.h"
+#include <jwt-cpp/jwt.h>
 
 
 using namespace std;
@@ -358,7 +359,6 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 
 	//토큰 분석
 	short TokenLength;
-	unsigned char Token[2048];
 
 	*pPacket >> TokenLength;
 	if (TokenLength <= 0 || TokenLength > 2048 || (pPacket->GetDataSize() != TokenLength))
@@ -376,20 +376,74 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 		return true;
 	}
 
-	pPacket->GetData(pPacket->GetReadBufferPtr(), TokenLength);
 
 	//일반로그인이면 여기서 pw확인, 구글로그인이면 api 호출
 	switch (LoginType)
 	{
-	//if 구글로그인 -> 인증 api호출(토큰 유효성 검사) -> 성공시 답장쏴줌. 실패시 FailCount++
+	//if 구글로그인 -> 토큰 유효성 검사 -> 성공시 답장쏴줌. 실패시 FailCount++
 	case df_LOGIN_GOOGLE_LOGIN:
 	{
-		//Google API 호출
+		std::string aud = "953975431943-c483uk1qdkaj5qs5grgs51fa1ghlagci.apps.googleusercontent.com";
+
+		char Token[2048];
+		pPacket->GetData((char*)Token, TokenLength);
+
+		string JWT_token = Token;
+		auto decoded = jwt::decode(JWT_token);
+		
+		bool audFlag = false;
+		bool expFlag = false;
+
+		for (auto& e : decoded.get_payload_json())
+		{
+			if (e.first == "aud")
+			{
+				std::string tempstring = e.second.to_str();
+				if (aud == tempstring)
+				{
+					//aud 인증 완료
+					audFlag = true;
+				}
+				else
+				{
+					//aud 인증 실패, 실패 토큰 보내기
+					CS_LOGIN_LOGINSERVER_RES(SessionID, df_RES_WRONG_TOKEN, SessionKey, GameServerIP, GameServerPort);
+					return true;
+				}
+			}
+			else if (e.first == "exp")
+			{
+				time_t seconds;
+				time(&seconds);
+				int seconds_int = (int)seconds;
+
+				std::string tempstring = e.second.to_str();
+				int exptime = std::stoi(tempstring);
+				if (seconds_int > exptime)
+				{
+					//토큰 만료
+					CS_LOGIN_LOGINSERVER_RES(SessionID, df_RES_WRONG_TOKEN, SessionKey, GameServerIP, GameServerPort);
+					return true;
+				}
+				else
+				{
+					expFlag = true;
+				}
+			}
+		}
+
+		if (audFlag == false || expFlag == false)
+		{
+			return true;
+		}
 		break;
 	}
 	//if 자체로그인 -> 받은 PW 암호화, encrypted PW와 비교 -> 성공시 답장쏴줌, 실패시 FailCount++
 	case df_LOGIN_SELF_LOGIN:
 	{
+		unsigned char Token[2048];
+		pPacket->GetData((char*)Token, TokenLength);
+
 		unsigned char encryptedToken[32] = { 0, };
 
 		SHA256_CTX sha256;
