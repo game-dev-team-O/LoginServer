@@ -875,7 +875,10 @@ DWORD WINAPI CNetServer::WorkerThread(CNetServer* ptr)
 					{
 						break;
 					}
+
+					
 					st_header header;
+					header.len = 0;
 
 					pSession->recvQueue.Peek((char*)&header, sizeof(st_header));
 					if (header.code != dfNETWORK_CODE) //key값 다를시 잘못된 패킷

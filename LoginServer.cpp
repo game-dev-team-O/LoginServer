@@ -128,7 +128,11 @@ DWORD WINAPI CLoginServer::MemoryDBThread(CLoginServer* pLoginServer)
 			}
 
 			//레디스에 쓰기
-			std::string sessionKey_string(SessionKey.sessionKey);
+			std::string sessionKey_string;
+			for (int i = 0; i < 64; i++)
+			{
+				sessionKey_string += SessionKey.sessionKey[i];
+			}
 			char Email[50] = { 0, };
 			WideCharToMultiByte(CP_ACP, 0, pPlayer->Email.Email, -1, Email, 50, NULL, NULL);
 			std::string Email_string(Email);
@@ -305,7 +309,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 	}
 	TlsSetValue(pNetServer->TLS_DBLastTimeIndex, (LPVOID)DBNowTime);
 
-	bool queryret = pDBConnector->sendQuery_Save(L"SELECT * FROM AccountInfo WHERE email = %S", Email.Email);
+	bool queryret = pDBConnector->sendQuery_Save(L"SELECT * FROM AccountInfo WHERE email = \"%s\"", Email.Email);
 	if (queryret == false)
 	{
 		WCHAR ErrorMsg[128];
@@ -316,6 +320,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 
 	MYSQL_ROW sql_row;
 	sql_row = pDBConnector->FetchRow();
+	
 	
 	if (sql_row == NULL)
 	{
@@ -331,15 +336,16 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 		}
 		return true;
 	}
+	
 
 	//DB에서 accountNo, PW, State 가져옴
 	unsigned char encryptedPW[32] = { 0, };
 	INT64 accountNo = atoll(sql_row[0]);
-	if (sql_row[1] != NULL)
+	if (sql_row[2] != NULL)
 	{
-		memcpy(encryptedPW, sql_row[1], 32);
+		memcpy(encryptedPW, sql_row[2], 32);
 	}
-	char state = (char)atoi(sql_row[2]);
+	char state = (char)atoi(sql_row[3]);
 	pDBConnector->FreeResult();
 
 	if (state != 0)
@@ -419,6 +425,9 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 
 				std::string tempstring = e.second.to_str();
 				int exptime = std::stoi(tempstring);
+
+				expFlag = true;
+				/*
 				if (seconds_int > exptime)
 				{
 					//토큰 만료
@@ -429,6 +438,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 				{
 					expFlag = true;
 				}
+				*/
 			}
 		}
 

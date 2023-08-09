@@ -14,7 +14,7 @@ enum {
 
 struct st_IP
 {
-    WCHAR IP[16];
+    WCHAR IP[20];
 };
 
 struct st_ServerAddress
