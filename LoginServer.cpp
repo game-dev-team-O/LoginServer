@@ -5,6 +5,7 @@
 #pragma comment (lib, "cpp_redis.lib")
 #pragma comment (lib, "tacopie.lib")
 #include <openssl/sha.h>
+#include <openssl/crypto.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <dbghelp.h>
@@ -339,11 +340,11 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 	
 
 	//DB에서 accountNo, PW, State 가져옴
-	unsigned char encryptedPW[32] = { 0, };
+	char encryptedPW[100] = { 0, };
 	INT64 accountNo = atoll(sql_row[0]);
 	if (sql_row[2] != NULL)
 	{
-		memcpy(encryptedPW, sql_row[2], 32);
+		memcpy(encryptedPW, sql_row[2], 100);
 	}
 	char state = (char)atoi(sql_row[3]);
 	pDBConnector->FreeResult();
@@ -426,8 +427,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 				std::string tempstring = e.second.to_str();
 				int exptime = std::stoi(tempstring);
 
-				expFlag = true;
-				/*
+				expFlag = true;				
 				if (seconds_int > exptime)
 				{
 					//토큰 만료
@@ -438,7 +438,7 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 				{
 					expFlag = true;
 				}
-				*/
+				
 			}
 		}
 
@@ -461,7 +461,9 @@ bool CLoginServer::packetProc_CS_LOGIN_LOGINSERVER_REQ(st_Player* pPlayer, CPack
 		SHA256_Update(&sha256, Token, TokenLength);
 		SHA256_Final(encryptedToken, &sha256);
 
-		if (memcmp(encryptedPW, encryptedToken, 32) != 0)
+		char* hexstring = OPENSSL_buf2hexstr(encryptedToken, 32);
+
+		if (memcmp(encryptedPW, hexstring, 95) != 0)
 		{
 			// 잘못된 패스워드
 			//	reply send
